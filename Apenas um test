@@ -1,0 +1,802 @@
+-- NovaUI Library - Tamanho Rayfield
+local NovaUI = {
+    Version = "1.0.0",
+    Build = "NOVA-1.0",
+    Flags = {},
+    Themes = {},
+    Windows = {},
+    CurrentTheme = "Dark"
+}
+
+-- Serviços
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+
+-- Variáveis globais
+local NovaUIInstance
+local Configuration = {
+    Enabled = false,
+    FolderName = "NovaUI_Configs",
+    FileName = "default"
+}
+
+-- Sistema de temas
+NovaUI.Themes = {
+    Dark = {
+        Primary = Color3.fromRGB(25, 25, 25),
+        Secondary = Color3.fromRGB(40, 40, 40),
+        Accent = Color3.fromRGB(0, 120, 215),
+        Text = Color3.fromRGB(240, 240, 240),
+        TextSecondary = Color3.fromRGB(180, 180, 180),
+        Success = Color3.fromRGB(76, 175, 80),
+        Warning = Color3.fromRGB(255, 152, 0),
+        Error = Color3.fromRGB(244, 67, 54)
+    },
+    Light = {
+        Primary = Color3.fromRGB(245, 245, 245),
+        Secondary = Color3.fromRGB(255, 255, 255),
+        Accent = Color3.fromRGB(0, 120, 215),
+        Text = Color3.fromRGB(30, 30, 30),
+        TextSecondary = Color3.fromRGB(100, 100, 100),
+        Success = Color3.fromRGB(76, 175, 80),
+        Warning = Color3.fromRGB(255, 152, 0),
+        Error = Color3.fromRGB(244, 67, 54)
+    },
+    Purple = {
+        Primary = Color3.fromRGB(30, 25, 40),
+        Secondary = Color3.fromRGB(50, 40, 65),
+        Accent = Color3.fromRGB(147, 112, 219),
+        Text = Color3.fromRGB(240, 240, 240),
+        TextSecondary = Color3.fromRGB(180, 180, 200),
+        Success = Color3.fromRGB(123, 104, 238),
+        Warning = Color3.fromRGB(255, 165, 0),
+        Error = Color3.fromRGB(220, 20, 60)
+    }
+}
+
+-- Funções utilitárias
+local function CreateRippleEffect(button)
+    local ripple = Instance.new("Frame")
+    ripple.Name = "Ripple"
+    ripple.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ripple.BackgroundTransparency = 0.8
+    ripple.Size = UDim2.new(0, 0, 0, 0)
+    ripple.Position = UDim2.new(0.5, 0, 0.5, 0)
+    ripple.AnchorPoint = Vector2.new(0.5, 0.5)
+    ripple.Parent = button
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = ripple
+    
+    local mousePos = UserInputService:GetMouseLocation()
+    local buttonPos = button.AbsolutePosition
+    local relativePos = Vector2.new(
+        mousePos.X - buttonPos.X,
+        mousePos.Y - buttonPos.Y
+    )
+    
+    ripple.Position = UDim2.new(0, relativePos.X, 0, relativePos.Y)
+    
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(ripple, tweenInfo, {
+        Size = UDim2.new(2, 0, 2, 0),
+        BackgroundTransparency = 1
+    })
+    
+    tween:Play()
+    tween.Completed:Connect(function()
+        ripple:Destroy()
+    end)
+end
+
+-- Sistema de configuração
+function NovaUI:SaveConfig()
+    if not Configuration.Enabled then return end
+    
+    local data = {}
+    for flagName, flagData in pairs(self.Flags) do
+        data[flagName] = flagData.Value
+    end
+    
+    if writefile then
+        local success, err = pcall(function()
+            if not isfolder(Configuration.FolderName) then
+                makefolder(Configuration.FolderName)
+            end
+            writefile(Configuration.FolderName .. "/" .. Configuration.FileName .. ".json", HttpService:JSONEncode(data))
+        end)
+        
+        if not success then
+            warn("NovaUI: Erro ao salvar configuração - " .. err)
+        end
+    end
+end
+
+function NovaUI:LoadConfig()
+    if not Configuration.Enabled then return end
+    
+    if readfile and isfile then
+        local success, err = pcall(function()
+            if isfile(Configuration.FolderName .. "/" .. Configuration.FileName .. ".json") then
+                local data = HttpService:JSONDecode(readfile(Configuration.FolderName .. "/" .. Configuration.FileName .. ".json"))
+                
+                for flagName, value in pairs(data) do
+                    if self.Flags[flagName] then
+                        self.Flags[flagName]:Set(value)
+                    end
+                end
+            end
+        end)
+        
+        if not success then
+            warn("NovaUI: Erro ao carregar configuração - " .. err)
+        end
+    end
+end
+
+-- Sistema de notificações
+function NovaUI:Notify(notificationData)
+    if not NovaUIInstance then return end
+    
+    local notification = Instance.new("Frame")
+    notification.Name = "Notification"
+    notification.BackgroundColor3 = self.Themes[self.CurrentTheme].Secondary
+    notification.Size = UDim2.new(0, 300, 0, 80)
+    notification.Position = UDim2.new(1, 320, 0, 20)
+    notification.AnchorPoint = Vector2.new(1, 0)
+    notification.Parent = NovaUIInstance
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = self.Themes[self.CurrentTheme].Accent
+    stroke.Thickness = 1
+    stroke.Parent = notification
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = notification
+    
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Text = notificationData.Title or "Notificação"
+    title.TextColor3 = self.Themes[self.CurrentTheme].Text
+    title.TextSize = 16
+    title.Font = Enum.Font.GothamBold
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, -20, 0, 20)
+    title.Position = UDim2.new(0, 10, 0, 10)
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = notification
+    
+    local content = Instance.new("TextLabel")
+    content.Name = "Content"
+    content.Text = notificationData.Content or ""
+    content.TextColor3 = self.Themes[self.CurrentTheme].TextSecondary
+    content.TextSize = 14
+    content.Font = Enum.Font.Gotham
+    content.BackgroundTransparency = 1
+    content.Size = UDim2.new(1, -20, 1, -40)
+    content.Position = UDim2.new(0, 10, 0, 35)
+    content.TextXAlignment = Enum.TextXAlignment.Left
+    content.TextYAlignment = Enum.TextYAlignment.Top
+    content.TextWrapped = true
+    content.Parent = notification
+    
+    -- Animação de entrada
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(notification, tweenInfo, {
+        Position = UDim2.new(1, -20, 0, 20)
+    })
+    tween:Play()
+    
+    -- Auto-destruir após tempo
+    local duration = notificationData.Duration or 5
+    task.delay(duration, function()
+        if notification.Parent then
+            local tweenOut = TweenService:Create(notification, tweenInfo, {
+                Position = UDim2.new(1, 320, 0, 20)
+            })
+            tweenOut:Play()
+            tweenOut.Completed:Connect(function()
+                notification:Destroy()
+            end)
+        end
+    end)
+end
+
+-- Sistema de janelas - MESMO TAMANHO DO RAYFIELD
+function NovaUI:CreateWindow(windowSettings)
+    -- Criar instância principal
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "NovaUI"
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.Parent = CoreGui
+    NovaUIInstance = screenGui
+    
+    -- Configurações
+    Configuration.Enabled = windowSettings.ConfigurationSaving and windowSettings.ConfigurationSaving.Enabled or false
+    if windowSettings.ConfigurationSaving then
+        Configuration.FolderName = windowSettings.ConfigurationSaving.FolderName or Configuration.FolderName
+        Configuration.FileName = windowSettings.ConfigurationSaving.FileName or Configuration.FileName
+    end
+    
+    -- Janela principal - MESMO TAMANHO DO RAYFIELD (500x475)
+    local mainWindow = Instance.new("Frame")
+    mainWindow.Name = "MainWindow"
+    mainWindow.BackgroundColor3 = self.Themes[self.CurrentTheme].Primary
+    mainWindow.Size = UDim2.new(0, 500, 0, 475) -- Tamanho igual ao Rayfield
+    mainWindow.Position = UDim2.new(0.5, -250, 0.5, -237.5) -- Centralizado
+    mainWindow.AnchorPoint = Vector2.new(0.5, 0.5)
+    mainWindow.Parent = screenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = mainWindow
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = self.Themes[self.CurrentTheme].Accent
+    stroke.Thickness = 2
+    stroke.Parent = mainWindow
+    
+    -- Topbar - MESMO TAMANHO DO RAYFIELD
+    local topbar = Instance.new("Frame")
+    topbar.Name = "Topbar"
+    topbar.BackgroundColor3 = self.Themes[self.CurrentTheme].Secondary
+    topbar.Size = UDim2.new(1, 0, 0, 45) -- Altura igual ao Rayfield
+    topbar.Parent = mainWindow
+    
+    local topbarCorner = Instance.new("UICorner")
+    topbarCorner.CornerRadius = UDim.new(0, 8)
+    topbarCorner.Parent = topbar
+    
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Text = windowSettings.Name or "NovaUI Window"
+    title.TextColor3 = self.Themes[self.CurrentTheme].Text
+    title.TextSize = 18
+    title.Font = Enum.Font.GothamBold
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, -100, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = topbar
+    
+    -- Botões da topbar
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Name = "CloseButton"
+    closeBtn.Text = "×"
+    closeBtn.TextColor3 = self.Themes[self.CurrentTheme].Text
+    closeBtn.TextSize = 20
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.BackgroundColor3 = self.Themes[self.CurrentTheme].Error
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0.5, -15)
+    closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+    closeBtn.Parent = topbar
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 4)
+    closeCorner.Parent = closeBtn
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+        NovaUIInstance = nil
+    end)
+    
+    -- Área de conteúdo
+    local contentArea = Instance.new("Frame")
+    contentArea.Name = "ContentArea"
+    contentArea.BackgroundTransparency = 1
+    contentArea.Size = UDim2.new(1, 0, 1, -45) -- Ajustado para altura da topbar
+    contentArea.Position = UDim2.new(0, 0, 0, 45)
+    contentArea.Parent = mainWindow
+    
+    -- Sistema de abas - LAYOUT IGUAL AO RAYFIELD
+    local tabButtons = Instance.new("Frame")
+    tabButtons.Name = "TabButtons"
+    tabButtons.BackgroundTransparency = 1
+    tabButtons.Size = UDim2.new(0, 120, 1, 0) -- Largura igual ao Rayfield
+    tabButtons.Parent = contentArea
+    
+    local tabContainer = Instance.new("Frame")
+    tabContainer.Name = "TabContainer"
+    tabContainer.BackgroundTransparency = 1
+    tabContainer.Size = UDim2.new(1, -120, 1, 0) -- Ajustado para largura das abas
+    tabContainer.Position = UDim2.new(0, 120, 0, 0)
+    tabContainer.Parent = contentArea
+    
+    -- SISTEMA DE ARRASTE CORRETO
+    local dragging = false
+    local dragStart, startPos
+    
+    local function updatePosition(input)
+        if dragging then
+            local delta = input.Position - dragStart
+            mainWindow.Position = UDim2.new(
+                0, startPos.X.Offset + delta.X,
+                0, startPos.Y.Offset + delta.Y
+            )
+        end
+    end
+    
+    topbar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainWindow.Position
+            
+            -- Conectar para movimento contínuo
+            local connection
+            connection = RunService.RenderStepped:Connect(function()
+                if dragging then
+                    local mouse = UserInputService:GetMouseLocation()
+                    local delta = Vector2.new(mouse.X, mouse.Y) - Vector2.new(dragStart.X, dragStart.Y)
+                    mainWindow.Position = UDim2.new(
+                        0, startPos.X.Offset + delta.X,
+                        0, startPos.Y.Offset + delta.Y
+                    )
+                else
+                    connection:Disconnect()
+                end
+            end)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    -- Retornar objeto da janela
+    local window = {
+        Tabs = {},
+        CurrentTab = nil,
+        MainWindow = mainWindow
+    }
+    
+    function window:CreateTab(tabName, tabIcon)
+        local tab = {}
+        
+        -- Botão da aba - TAMANHO IGUAL AO RAYFIELD
+        local tabButton = Instance.new("TextButton")
+        tabButton.Name = tabName
+        tabButton.Text = tabName
+        tabButton.TextColor3 = NovaUI.Themes[NovaUI.CurrentTheme].TextSecondary
+        tabButton.TextSize = 14
+        tabButton.Font = Enum.Font.Gotham
+        tabButton.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Primary
+        tabButton.Size = UDim2.new(1, -10, 0, 35) -- Tamanho igual ao Rayfield
+        tabButton.Position = UDim2.new(0, 5, 0, #self.Tabs * 40 + 5) -- Espaçamento igual
+        tabButton.Parent = tabButtons
+        
+        local tabButtonCorner = Instance.new("UICorner")
+        tabButtonCorner.CornerRadius = UDim.new(0, 4)
+        tabButtonCorner.Parent = tabButton
+        
+        -- Conteúdo da aba
+        local tabContent = Instance.new("ScrollingFrame")
+        tabContent.Name = tabName
+        tabContent.BackgroundTransparency = 1
+        tabContent.Size = UDim2.new(1, -20, 1, -20) -- Margens iguais
+        tabContent.Position = UDim2.new(0, 10, 0, 10)
+        tabContent.ScrollBarThickness = 3
+        tabContent.ScrollBarImageColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Accent
+        tabContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        tabContent.Visible = false
+        tabContent.Parent = tabContainer
+        
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 5)
+        layout.Parent = tabContent
+        
+        -- Função para selecionar aba
+        local function selectTab()
+            if self.CurrentTab then
+                self.CurrentTab.Button.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Primary
+                self.CurrentTab.Button.TextColor3 = NovaUI.Themes[NovaUI.CurrentTheme].TextSecondary
+                self.CurrentTab.Content.Visible = false
+            end
+            
+            tabButton.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Accent
+            tabButton.TextColor3 = Color3.new(1, 1, 1)
+            tabContent.Visible = true
+            
+            self.CurrentTab = {
+                Button = tabButton,
+                Content = tabContent
+            }
+        end
+        
+        tabButton.MouseButton1Click:Connect(selectTab)
+        
+        -- Selecionar primeira aba
+        if #self.Tabs == 0 then
+            selectTab()
+        end
+        
+        -- Métodos da aba
+        function tab:CreateSection(sectionName)
+            local section = Instance.new("Frame")
+            section.Name = "Section"
+            section.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Secondary
+            section.Size = UDim2.new(1, 0, 0, 30) -- Altura igual
+            section.Parent = tabContent
+            
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 4)
+            corner.Parent = section
+            
+            local title = Instance.new("TextLabel")
+            title.Name = "Title"
+            title.Text = sectionName
+            title.TextColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Text
+            title.TextSize = 14
+            title.Font = Enum.Font.GothamBold
+            title.BackgroundTransparency = 1
+            title.Size = UDim2.new(1, -10, 1, 0)
+            title.Position = UDim2.new(0, 10, 0, 0)
+            title.TextXAlignment = Enum.TextXAlignment.Left
+            title.Parent = section
+            
+            return {
+                Destroy = function()
+                    section:Destroy()
+                end
+            }
+        end
+        
+        function tab:CreateButton(buttonSettings)
+            local button = Instance.new("TextButton")
+            button.Name = buttonSettings.Name
+            button.Text = buttonSettings.Name
+            button.TextColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Text
+            button.TextSize = 14
+            button.Font = Enum.Font.Gotham
+            button.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Secondary
+            button.Size = UDim2.new(1, 0, 0, 35) -- Altura igual
+            button.Parent = tabContent
+            
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 4)
+            corner.Parent = button
+            
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = NovaUI.Themes[NovaUI.CurrentTheme].Accent
+            stroke.Thickness = 1
+            stroke.Parent = button
+            
+            button.MouseButton1Click:Connect(function()
+                CreateRippleEffect(button)
+                local success, err = pcall(buttonSettings.Callback)
+                if not success then
+                    warn("NovaUI: Erro no callback do botão - " .. err)
+                end
+            end)
+            
+            button.MouseEnter:Connect(function()
+                TweenService:Create(button, TweenInfo.new(0.2), {
+                    BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Accent
+                }):Play()
+            end)
+            
+            button.MouseLeave:Connect(function()
+                TweenService:Create(button, TweenInfo.new(0.2), {
+                    BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Secondary
+                }):Play()
+            end)
+            
+            return {
+                Destroy = function()
+                    button:Destroy()
+                end,
+                SetText = function(newText)
+                    button.Text = newText
+                end
+            }
+        end
+        
+        function tab:CreateToggle(toggleSettings)
+            local toggle = {}
+            toggle.Value = toggleSettings.Default or false
+            
+            local toggleFrame = Instance.new("Frame")
+            toggleFrame.Name = toggleSettings.Name
+            toggleFrame.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Secondary
+            toggleFrame.Size = UDim2.new(1, 0, 0, 35) -- Altura igual
+            toggleFrame.Parent = tabContent
+            
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 4)
+            corner.Parent = toggleFrame
+            
+            local title = Instance.new("TextLabel")
+            title.Name = "Title"
+            title.Text = toggleSettings.Name
+            title.TextColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Text
+            title.TextSize = 14
+            title.Font = Enum.Font.Gotham
+            title.BackgroundTransparency = 1
+            title.Size = UDim2.new(0.7, 0, 1, 0)
+            title.Position = UDim2.new(0, 10, 0, 0)
+            title.TextXAlignment = Enum.TextXAlignment.Left
+            title.Parent = toggleFrame
+            
+            local toggleButton = Instance.new("TextButton")
+            toggleButton.Name = "Toggle"
+            toggleButton.Text = ""
+            toggleButton.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Primary
+            toggleButton.Size = UDim2.new(0, 50, 0, 25) -- Tamanho igual
+            toggleButton.Position = UDim2.new(1, -60, 0.5, -12.5)
+            toggleButton.AnchorPoint = Vector2.new(1, 0.5)
+            toggleButton.Parent = toggleFrame
+            
+            local toggleCorner = Instance.new("UICorner")
+            toggleCorner.CornerRadius = UDim.new(1, 0)
+            toggleCorner.Parent = toggleButton
+            
+            local toggleDot = Instance.new("Frame")
+            toggleDot.Name = "Dot"
+            toggleDot.BackgroundColor3 = Color3.new(1, 1, 1)
+            toggleDot.Size = UDim2.new(0, 19, 0, 19) -- Tamanho igual
+            toggleDot.Position = UDim2.new(0, 3, 0.5, -9.5)
+            toggleDot.AnchorPoint = Vector2.new(0, 0.5)
+            toggleDot.Parent = toggleButton
+            
+            local dotCorner = Instance.new("UICorner")
+            dotCorner.CornerRadius = UDim.new(1, 0)
+            dotCorner.Parent = toggleDot
+            
+            local function updateToggle()
+                if toggle.Value then
+                    TweenService:Create(toggleButton, TweenInfo.new(0.2), {
+                        BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Success
+                    }):Play()
+                    TweenService:Create(toggleDot, TweenInfo.new(0.2), {
+                        Position = UDim2.new(1, -22, 0.5, -9.5)
+                    }):Play()
+                else
+                    TweenService:Create(toggleButton, TweenInfo.new(0.2), {
+                        BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Primary
+                    }):Play()
+                    TweenService:Create(toggleDot, TweenInfo.new(0.2), {
+                        Position = UDim2.new(0, 3, 0.5, -9.5)
+                    }):Play()
+                end
+            end
+            
+            toggleButton.MouseButton1Click:Connect(function()
+                toggle.Value = not toggle.Value
+                updateToggle()
+                
+                local success, err = pcall(function()
+                    toggleSettings.Callback(toggle.Value)
+                end)
+                
+                if not success then
+                    warn("NovaUI: Erro no callback do toggle - " .. err)
+                end
+                
+                if toggleSettings.Flag then
+                    NovaUI.Flags[toggleSettings.Flag] = toggle
+                    NovaUI:SaveConfig()
+                end
+            end)
+            
+            updateToggle()
+            
+            function toggle:Set(value)
+                toggle.Value = value
+                updateToggle()
+                
+                if toggleSettings.Callback then
+                    toggleSettings.Callback(value)
+                end
+            end
+            
+            if toggleSettings.Flag then
+                NovaUI.Flags[toggleSettings.Flag] = toggle
+            end
+            
+            return toggle
+        end
+        
+        function tab:CreateSlider(sliderSettings)
+            local slider = {}
+            slider.Value = sliderSettings.Default or sliderSettings.Min
+            
+            local sliderFrame = Instance.new("Frame")
+            sliderFrame.Name = sliderSettings.Name
+            sliderFrame.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Secondary
+            sliderFrame.Size = UDim2.new(1, 0, 0, 60) -- Altura igual
+            sliderFrame.Parent = tabContent
+            
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(0, 4)
+            corner.Parent = sliderFrame
+            
+            local title = Instance.new("TextLabel")
+            title.Name = "Title"
+            title.Text = sliderSettings.Name
+            title.TextColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Text
+            title.TextSize = 14
+            title.Font = Enum.Font.Gotham
+            title.BackgroundTransparency = 1
+            title.Size = UDim2.new(1, -20, 0, 20)
+            title.Position = UDim2.new(0, 10, 0, 5)
+            title.TextXAlignment = Enum.TextXAlignment.Left
+            title.Parent = sliderFrame
+            
+            local valueLabel = Instance.new("TextLabel")
+            valueLabel.Name = "Value"
+            valueLabel.Text = tostring(slider.Value) .. (sliderSettings.Suffix or "")
+            valueLabel.TextColor3 = NovaUI.Themes[NovaUI.CurrentTheme].TextSecondary
+            valueLabel.TextSize = 12
+            valueLabel.Font = Enum.Font.Gotham
+            valueLabel.BackgroundTransparency = 1
+            valueLabel.Size = UDim2.new(0, 100, 0, 20)
+            valueLabel.Position = UDim2.new(1, -110, 0, 5)
+            valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+            valueLabel.Parent = sliderFrame
+            
+            local track = Instance.new("Frame")
+            track.Name = "Track"
+            track.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Primary
+            track.Size = UDim2.new(1, -20, 0, 6)
+            track.Position = UDim2.new(0, 10, 1, -25)
+            track.Parent = sliderFrame
+            
+            local trackCorner = Instance.new("UICorner")
+            trackCorner.CornerRadius = UDim.new(1, 0)
+            trackCorner.Parent = track
+            
+            local fill = Instance.new("Frame")
+            fill.Name = "Fill"
+            fill.BackgroundColor3 = NovaUI.Themes[NovaUI.CurrentTheme].Accent
+            fill.Size = UDim2.new(0, 0, 1, 0)
+            fill.Parent = track
+            
+            local fillCorner = Instance.new("UICorner")
+            fillCorner.CornerRadius = UDim.new(1, 0)
+            fillCorner.Parent = fill
+            
+            local thumb = Instance.new("TextButton")
+            thumb.Name = "Thumb"
+            thumb.Text = ""
+            thumb.BackgroundColor3 = Color3.new(1, 1, 1)
+            thumb.Size = UDim2.new(0, 16, 0, 16)
+            thumb.Position = UDim2.new(0, -8, 0.5, -8)
+            thumb.AnchorPoint = Vector2.new(0, 0.5)
+            thumb.Parent = fill
+            
+            local thumbCorner = Instance.new("UICorner")
+            thumbCorner.CornerRadius = UDim.new(1, 0)
+            thumbCorner.Parent = thumb
+            
+            local function updateSlider()
+                local range = sliderSettings.Max - sliderSettings.Min
+                local percentage = (slider.Value - sliderSettings.Min) / range
+                
+                fill.Size = UDim2.new(percentage, 0, 1, 0)
+                valueLabel.Text = tostring(slider.Value) .. (sliderSettings.Suffix or "")
+            end
+            
+            local function setValueFromX(x)
+                local relativeX = math.clamp(x - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
+                local percentage = relativeX / track.AbsoluteSize.X
+                local value = sliderSettings.Min + (percentage * (sliderSettings.Max - sliderSettings.Min))
+                
+                -- Aplicar incremento
+                if sliderSettings.Increment then
+                    value = math.floor(value / sliderSettings.Increment + 0.5) * sliderSettings.Increment
+                end
+                
+                value = math.clamp(value, sliderSettings.Min, sliderSettings.Max)
+                slider.Value = value
+                updateSlider()
+                
+                if sliderSettings.Callback then
+                    sliderSettings.Callback(value)
+                end
+                
+                if sliderSettings.Flag then
+                    NovaUI.Flags[sliderSettings.Flag] = slider
+                    NovaUI:SaveConfig()
+                end
+            end
+            
+            thumb.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    local connection
+                    connection = RunService.Heartbeat:Connect(function()
+                        if not thumb:IsDescendantOf(game) then
+                            connection:Disconnect()
+                            return
+                        end
+                        
+                        local mousePos = UserInputService:GetMouseLocation()
+                        setValueFromX(mousePos.X)
+                    end)
+                    
+                    thumb.InputEnded:Connect(function(endInput)
+                        if endInput.UserInputType == Enum.UserInputType.MouseButton1 then
+                            connection:Disconnect()
+                        end
+                    end)
+                end
+            end)
+            
+            track.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    local mousePos = UserInputService:GetMouseLocation()
+                    setValueFromX(mousePos.X)
+                end
+            end)
+            
+            updateSlider()
+            
+            function slider:Set(value)
+                slider.Value = math.clamp(value, sliderSettings.Min, sliderSettings.Max)
+                updateSlider()
+                
+                if sliderSettings.Callback then
+                    sliderSettings.Callback(slider.Value)
+                end
+            end
+            
+            if sliderSettings.Flag then
+                NovaUI.Flags[sliderSettings.Flag] = slider
+            end
+            
+            return slider
+        end
+        
+        table.insert(self.Tabs, tab)
+        return tab
+    end
+    
+    function window:ChangeTheme(themeName)
+        if NovaUI.Themes[themeName] then
+            NovaUI.CurrentTheme = themeName
+        end
+    end
+    
+    -- Função para reposicionar a janela no centro
+    function window:Center()
+        self.MainWindow.Position = UDim2.new(0.5, -250, 0.5, -237.5)
+    end
+    
+    -- Centralizar automaticamente
+    window:Center()
+    
+    -- Carregar configuração salva
+    NovaUI:LoadConfig()
+    
+    return window
+end
+
+-- Sistema de inicialização
+function NovaUI:Init(settings)
+    if not settings then
+        error("NovaUI: Configurações são necessárias para inicializar")
+    end
+    
+    -- Aplicar tema
+    if settings.Theme and self.Themes[settings.Theme] then
+        self.CurrentTheme = settings.Theme
+    end
+    
+    -- Criar janela principal
+    local mainWindow = self:CreateWindow({
+        Name = settings.Name or "NovaUI",
+        ConfigurationSaving = settings.ConfigurationSaving
+    })
+    
+    return mainWindow
+end
+
+return NovaUI
